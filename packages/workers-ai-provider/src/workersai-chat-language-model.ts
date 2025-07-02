@@ -96,7 +96,8 @@ export class WorkersAIChatLanguageModel implements LanguageModelV2 {
 				temperature,
 				top_p: topP,
 				random_seed: seed,
-				response_format: responseFormat?.type ?? "text",
+				// Don't include response_format for Cloudflare AI
+				// response_format: responseFormat?.type ?? "text",
 
 				// tools
 				tools: tools,
@@ -358,7 +359,7 @@ export class WorkersAIChatLanguageModel implements LanguageModelV2 {
 			tools: args.tools,
 			top_p: args.top_p,
 			...(imagePart ? { image: Array.from(imagePart.image) } : {}),
-			...(args.response_format ? { response_format: args.response_format } : {}),
+			// Don't include response_format for streaming
 		};
 		
 		console.log('Full run options:', JSON.stringify(runOptions, null, 2));
@@ -380,6 +381,10 @@ export class WorkersAIChatLanguageModel implements LanguageModelV2 {
 
 		console.log('Workers AI stream', args);
 
+		// Track text state across transform calls
+		let textStarted = false;
+		let lastUsage: any = null;
+
 		return {
 			stream: response.pipeThrough(
 				new TransformStream<Uint8Array, LanguageModelV2StreamPart>({
@@ -391,61 +396,73 @@ export class WorkersAIChatLanguageModel implements LanguageModelV2 {
 						const text = new TextDecoder().decode(chunk);
 						console.log('[DIRECT STREAM] Received chunk:', text);
 						
-						// Try to parse as JSON first (Cloudflare AI typically returns JSON chunks)
-						try {
-							const data = JSON.parse(text);
-							console.log('[DIRECT STREAM] Parsed JSON:', data);
-							
-							// Check for errors first
-							if (data.errors && data.errors.length > 0) {
-								console.error('[DIRECT STREAM] Cloudflare AI Error:', data.errors);
-								// Still try to process any partial response
+						// Handle SSE format
+						const lines = text.split('\n');
+						for (const line of lines) {
+							if (line.startsWith('data: ')) {
+								const dataStr = line.slice(6); // Remove 'data: ' prefix
+								
+								// Skip [DONE] marker
+								if (dataStr === '[DONE]') {
+									console.log('[DIRECT STREAM] Received [DONE]');
+									continue;
+								}
+								
+								try {
+									const data = JSON.parse(dataStr);
+									console.log('[DIRECT STREAM] Parsed JSON:', data);
+									
+									// Check for errors first
+									if (data.errors && data.errors.length > 0) {
+										console.error('[DIRECT STREAM] Cloudflare AI Error:', data.errors);
+										// Still try to process any partial response
+									}
+									
+									if (data.response && data.response !== null && data.response !== '') {
+										// Start text if not started
+										if (!textStarted) {
+											controller.enqueue({
+												type: 'text-start',
+												id: generateId(),
+											});
+											textStarted = true;
+										}
+										// Send the text delta
+										controller.enqueue({
+											type: 'text-delta',
+											id: generateId(),
+											delta: data.response,
+										});
+									}
+									
+									// Handle usage data
+									if (data.usage) {
+										console.log('[DIRECT STREAM] Usage:', data.usage);
+										lastUsage = data.usage;
+									}
+								} catch (e) {
+									console.log('[DIRECT STREAM] Failed to parse data:', dataStr, e);
+								}
 							}
-							
-							if (data.response) {
-								// Start text if not started
-								controller.enqueue({
-									type: 'text-start',
-									id: generateId(),
-								});
-								// Send the text delta
-								controller.enqueue({
-									type: 'text-delta',
-									id: generateId(),
-									delta: data.response,
-								});
-							} else if (data.result?.response) {
-								// Sometimes the response is nested in result
-								controller.enqueue({
-									type: 'text-start',
-									id: generateId(),
-								});
-								controller.enqueue({
-									type: 'text-delta',
-									id: generateId(),
-									delta: data.result.response,
-								});
-							}
-						} catch (e) {
-							// If not JSON, treat as plain text
-							console.log('[DIRECT STREAM] Not JSON, treating as text');
-							controller.enqueue({
-								type: 'text-delta',
-								id: generateId(),
-								delta: text,
-							});
 						}
 					},
 					flush(controller) {
 						console.log('[DIRECT STREAM] Stream finished');
-						controller.enqueue({
-							type: 'text-end',
-							id: generateId(),
-						});
+						// Only send text-end if we started text
+						if (textStarted) {
+							controller.enqueue({
+								type: 'text-end',
+								id: generateId(),
+							});
+						}
 						controller.enqueue({
 							type: 'finish',
 							finishReason: 'stop',
-							usage: {
+							usage: lastUsage ? {
+								inputTokens: lastUsage.prompt_tokens || 0,
+								outputTokens: lastUsage.completion_tokens || 0,
+								totalTokens: lastUsage.total_tokens || 0,
+							} : {
 								inputTokens: 0,
 								outputTokens: 0,
 								totalTokens: 0,
