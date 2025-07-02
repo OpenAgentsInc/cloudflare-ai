@@ -12,14 +12,20 @@ export function getMappedStream(response: Response) {
 
 	return new ReadableStream<LanguageModelV2StreamPart>({
 		async start(controller) {
+			console.log('[STREAMING] Starting stream processing');
 			for await (const event of chunkEvent) {
+				console.log('[STREAMING] Event received:', event);
 				if (!event.data) {
+					console.log('[STREAMING] No data in event, continuing');
 					continue;
 				}
 				if (event.data === "[DONE]") {
+					console.log('[STREAMING] Received [DONE], breaking');
 					break;
 				}
+				console.log('[STREAMING] Raw event data:', event.data);
 				const chunk = JSON.parse(event.data);
+				console.log('[STREAMING] Parsed chunk:', chunk);
 				if (chunk.usage) {
 					usage = mapWorkersAIUsage(chunk);
 				}
@@ -28,7 +34,9 @@ export function getMappedStream(response: Response) {
 					continue;
 				}
 				if (chunk.response?.length) {
+					console.log('[STREAMING] Text chunk found:', chunk.response);
 					if (!textStarted) {
+						console.log('[STREAMING] Starting text stream');
 						controller.enqueue({
 							type: "text-start",
 							id: crypto.randomUUID(),
@@ -40,6 +48,9 @@ export function getMappedStream(response: Response) {
 						id: crypto.randomUUID(),
 						delta: chunk.response,
 					});
+					console.log('[STREAMING] Enqueued text-delta');
+				} else {
+					console.log('[STREAMING] No response in chunk');
 				}
 			}
 

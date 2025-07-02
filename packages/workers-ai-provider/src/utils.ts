@@ -104,12 +104,18 @@ export function createRun(config: CreateRunConfig): AiRun {
 
 		const body = JSON.stringify(inputs);
 
+		console.log('[createRun] Making request to:', url);
+		console.log('[createRun] With body:', body);
+		
 		// Execute the POST request. The optional AbortSignal is applied here.
 		const response = await fetch(url, {
 			method: "POST",
 			headers,
 			body,
 		});
+		
+		console.log('[createRun] Response status:', response.status);
+		console.log('[createRun] Response headers:', Object.fromEntries(response.headers.entries()));
 
 		// (1) If the user explicitly requests the raw Response, return it as-is.
 		if (returnRawResponse) {

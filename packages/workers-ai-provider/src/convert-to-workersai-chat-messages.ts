@@ -19,7 +19,17 @@ export function convertToWorkersAIChatMessages(prompt: LanguageModelV2Prompt): {
 	for (const { role, content } of prompt) {
 		switch (role) {
 			case "system": {
-				messages.push({ role: "system", content });
+				messages.push({ 
+					role: "system", 
+					content: content
+						.map((part) => {
+							if (part.type === "text") {
+								return part.text;
+							}
+							return "";
+						})
+						.join("\n")
+				});
 				break;
 			}
 

@@ -11,7 +11,7 @@ import type { TextGenerationModels } from "./workersai-models";
 
 import { mapWorkersAIUsage } from "./map-workersai-usage";
 import { lastMessageWasUser } from "./utils";
-import { getMappedStream } from "./streaming";
+// import { getMappedStream } from "./streaming";
 
 type WorkersAIChatConfig = {
 	provider: string;
@@ -348,58 +348,112 @@ export class WorkersAIChatLanguageModel implements LanguageModelV2 {
 		const imagePart = images[0];
 
 		console.log('Starting Workers AI stream with args:', args, 'and imagePart:', imagePart);
+		console.log('Messages being sent:', JSON.stringify(messages, null, 2));
+		
+		const runOptions = {
+			messages,
+			max_tokens: args.max_tokens,
+			stream: true,
+			temperature: args.temperature,
+			tools: args.tools,
+			top_p: args.top_p,
+			...(imagePart ? { image: Array.from(imagePart.image) } : {}),
+			...(args.response_format ? { response_format: args.response_format } : {}),
+		};
+		
+		console.log('Full run options:', JSON.stringify(runOptions, null, 2));
+		
 		const response = await this.config.binding.run(
 			args.model,
-			{
-				messages,
-				max_tokens: args.max_tokens,
-				stream: true,
-				temperature: args.temperature,
-				tools: args.tools,
-				top_p: args.top_p,
-				...(imagePart ? { image: Array.from(imagePart.image) } : {}),
-				// @ts-expect-error response_format not yet added to types
-				response_format: args.response_format,
-			},
+			runOptions as any,
 			{
 				gateway: this.config.gateway ?? this.settings.gateway,
 			},
 		);
 
+		console.log('Workers AI response type:', typeof response, response instanceof ReadableStream, response instanceof Response);
+		
+		// Ensure we have a ReadableStream
 		if (!(response instanceof ReadableStream)) {
-			throw new Error('Expected a stream from Workers AI');
+			throw new Error('Expected a ReadableStream from Workers AI');
 		}
 
 		console.log('Workers AI stream', args);
 
 		return {
-			// stream: response.pipeThrough(
-			// 	new TransformStream<Uint8Array, LanguageModelV2StreamPart>({
-			// 		start(controller) {
-			// 			console.log('Starting Workers AI stream', args);
-			// 			controller.enqueue({ type: 'stream-start', warnings });
-			// 		},
-			// 		async transform(chunk, controller) {
-			// 			const text = new TextDecoder().decode(chunk);
-			// 			controller.enqueue({ type: 'text', text });
-			//
-			// 			console.log('Workers AI stream chunk', text);
-			// 		},
-			// 		flush(controller) {
-			// 			console.log('Workers AI stream finished');
-			// 			controller.enqueue({
-			// 				type: 'finish',
-			// 				finishReason: 'stop',
-			// 				usage: {
-			// 					inputTokens: undefined,
-			// 					outputTokens: undefined,
-			// 					totalTokens: undefined,
-			// 				},
-			// 			});
-			// 		},
-			// 	})
-			// ),
-			stream: getMappedStream(new Response(response)),
+			stream: response.pipeThrough(
+				new TransformStream<Uint8Array, LanguageModelV2StreamPart>({
+					async start(controller) {
+						console.log('[DIRECT STREAM] Starting Workers AI stream');
+						controller.enqueue({ type: 'stream-start', warnings });
+					},
+					async transform(chunk, controller) {
+						const text = new TextDecoder().decode(chunk);
+						console.log('[DIRECT STREAM] Received chunk:', text);
+						
+						// Try to parse as JSON first (Cloudflare AI typically returns JSON chunks)
+						try {
+							const data = JSON.parse(text);
+							console.log('[DIRECT STREAM] Parsed JSON:', data);
+							
+							// Check for errors first
+							if (data.errors && data.errors.length > 0) {
+								console.error('[DIRECT STREAM] Cloudflare AI Error:', data.errors);
+								// Still try to process any partial response
+							}
+							
+							if (data.response) {
+								// Start text if not started
+								controller.enqueue({
+									type: 'text-start',
+									id: generateId(),
+								});
+								// Send the text delta
+								controller.enqueue({
+									type: 'text-delta',
+									id: generateId(),
+									delta: data.response,
+								});
+							} else if (data.result?.response) {
+								// Sometimes the response is nested in result
+								controller.enqueue({
+									type: 'text-start',
+									id: generateId(),
+								});
+								controller.enqueue({
+									type: 'text-delta',
+									id: generateId(),
+									delta: data.result.response,
+								});
+							}
+						} catch (e) {
+							// If not JSON, treat as plain text
+							console.log('[DIRECT STREAM] Not JSON, treating as text');
+							controller.enqueue({
+								type: 'text-delta',
+								id: generateId(),
+								delta: text,
+							});
+						}
+					},
+					flush(controller) {
+						console.log('[DIRECT STREAM] Stream finished');
+						controller.enqueue({
+							type: 'text-end',
+							id: generateId(),
+						});
+						controller.enqueue({
+							type: 'finish',
+							finishReason: 'stop',
+							usage: {
+								inputTokens: 0,
+								outputTokens: 0,
+								totalTokens: 0,
+							},
+						});
+					},
+				})
+			),
 			request: { body: args },
 			response: {},
 		};
