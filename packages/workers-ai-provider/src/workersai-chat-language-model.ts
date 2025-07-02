@@ -383,6 +383,7 @@ export class WorkersAIChatLanguageModel implements LanguageModelV2 {
 
 		// Track text state across transform calls
 		let textStarted = false;
+		let textId: string | null = null;
 		let lastUsage: any = null;
 
 		return {
@@ -421,16 +422,17 @@ export class WorkersAIChatLanguageModel implements LanguageModelV2 {
 									if (data.response && data.response !== null && data.response !== '') {
 										// Start text if not started
 										if (!textStarted) {
+											textId = generateId();
 											controller.enqueue({
 												type: 'text-start',
-												id: generateId(),
+												id: textId,
 											});
 											textStarted = true;
 										}
 										// Send the text delta
 										controller.enqueue({
 											type: 'text-delta',
-											id: generateId(),
+											id: textId!,
 											delta: data.response,
 										});
 									}
@@ -449,10 +451,10 @@ export class WorkersAIChatLanguageModel implements LanguageModelV2 {
 					flush(controller) {
 						console.log('[DIRECT STREAM] Stream finished');
 						// Only send text-end if we started text
-						if (textStarted) {
+						if (textStarted && textId) {
 							controller.enqueue({
 								type: 'text-end',
-								id: generateId(),
+								id: textId,
 							});
 						}
 						controller.enqueue({
