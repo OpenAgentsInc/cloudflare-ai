@@ -5,7 +5,7 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.0.6",
-		"@cloudflare/workers-types": "^4.20250701.0",
+		"@cloudflare/workers-types": "^4.20250702.0",
 		"typescript": "^5.8.3",
 		"vitest": "~3.2.4"
 	},

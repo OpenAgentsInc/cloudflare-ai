@@ -16,7 +16,7 @@
 		"type-check": "tsc --noEmit"
 	},
 	"dependencies": {
-		"agents": "^0.0.100",
+		"agents": "^0.0.101",
 		"ai": "^4.3.16",
 		"hono": "^4.8.3",
 		"zod": "^3.25.67"

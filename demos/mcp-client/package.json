@@ -11,15 +11,15 @@
 	"keywords": [],
 	"author": "",
 	"dependencies": {
-		"@modelcontextprotocol/sdk": "1.13.1",
-		"agents": "^0.0.100",
+		"@modelcontextprotocol/sdk": "^1.13.3",
+		"agents": "^0.0.101",
 		"nanoid": "^5.1.5",
 		"react": "^19.1.0",
 		"react-dom": "^19.1.0"
 	},
 	"devDependencies": {
 		"@cloudflare/vite-plugin": "^1.8.0",
-		"@cloudflare/workers-types": "^4.20250701.0",
+		"@cloudflare/workers-types": "^4.20250702.0",
 		"@types/react": "^19.1.8",
 		"@types/react-dom": "^19.1.6",
 		"@vitejs/plugin-react": "^4.6.0",

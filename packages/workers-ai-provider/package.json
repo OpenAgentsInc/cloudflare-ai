@@ -43,7 +43,7 @@
 		"@ai-sdk/provider-utils": "^2.2.8"
 	},
 	"devDependencies": {
-		"@cloudflare/workers-types": "^4.20250701.0",
+		"@cloudflare/workers-types": "^4.20250702.0",
 		"zod": "^3.25.67"
 	}
 }

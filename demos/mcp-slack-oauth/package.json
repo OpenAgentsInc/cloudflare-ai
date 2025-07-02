@@ -11,7 +11,7 @@
 	},
 	"dependencies": {
 		"@cloudflare/workers-oauth-provider": "^0.0.5",
-		"@modelcontextprotocol/sdk": "1.13.1",
+		"@modelcontextprotocol/sdk": "^1.13.3",
 		"@slack/web-api": "^7.9.3",
 		"hono": "^4.8.3",
 		"just-pick": "^4.2.0",
@@ -19,7 +19,7 @@
 		"workers-mcp": "^0.0.13"
 	},
 	"devDependencies": {
-		"@cloudflare/workers-types": "^4.20250701.0",
+		"@cloudflare/workers-types": "^4.20250702.0",
 		"prettier": "^3.6.2",
 		"typescript": "^5.8.3",
 		"wrangler": "^4.22.0",
