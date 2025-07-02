@@ -8,6 +8,7 @@ export function getMappedStream(response: Response) {
 	const chunkEvent = events(response);
 	let usage: LanguageModelV2Usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 }
 	const partialToolCalls: any[] = [];
+	let textStarted = false;
 
 	return new ReadableStream<LanguageModelV2StreamPart>({
 		async start(controller) {
@@ -26,13 +27,27 @@ export function getMappedStream(response: Response) {
 					partialToolCalls.push(...chunk.tool_calls);
 					continue;
 				}
-				chunk.response?.length &&
+				if (chunk.response?.length) {
+					if (!textStarted) {
+						controller.enqueue({
+							type: "text-start",
+							id: crypto.randomUUID(),
+						});
+						textStarted = true;
+					}
 					controller.enqueue({
-						// type: "text-delta",
-						// textDelta: chunk.response,
-						type: "text",
-						text: chunk.response,
+						type: "text-delta",
+						id: crypto.randomUUID(),
+						delta: chunk.response,
 					});
+				}
+			}
+
+			if (textStarted) {
+				controller.enqueue({
+					type: "text-end",
+					id: crypto.randomUUID(),
+				});
 			}
 
 			if (partialToolCalls.length > 0) {
