@@ -1,4 +1,12 @@
-import type { LanguageModelV2, LanguageModelV1FunctionToolCall } from "@ai-sdk/provider";
+import type { LanguageModelV2 } from "@ai-sdk/provider";
+
+// Custom type to replace LanguageModelV1FunctionToolCall for v5 compatibility
+interface FunctionToolCall {
+	toolCallType: string;
+	toolCallId: string;
+	toolName: string;
+	args: string;
+}
 
 /**
  * General AI run interface with overloads to handle distinct return types.
@@ -220,7 +228,7 @@ function mergePartialToolCalls(partialCalls: any[]) {
 	return Object.values(mergedCallsByIndex);
 }
 
-function processToolCall(toolCall: any): LanguageModelV1FunctionToolCall {
+function processToolCall(toolCall: any): FunctionToolCall {
 	if (toolCall.function && toolCall.id) {
 		return {
 			toolCallType: "function",
@@ -243,7 +251,7 @@ function processToolCall(toolCall: any): LanguageModelV1FunctionToolCall {
 	};
 }
 
-export function processToolCalls(output: any): LanguageModelV1FunctionToolCall[] {
+export function processToolCalls(output: any): FunctionToolCall[] {
 	// Check for OpenAI format tool calls first
 	if (output.tool_calls && Array.isArray(output.tool_calls)) {
 		return output.tool_calls.map((toolCall: any) => {

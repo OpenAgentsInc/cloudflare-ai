@@ -158,10 +158,9 @@ export class WorkersAIChatLanguageModel implements LanguageModelV2 {
 		for (const toolCall of output.tool_calls ?? []) {
 			content.push({
 				type: 'tool-call' as const,
-				toolCallType: 'function',
 				toolCallId: generateId(),
 				toolName: toolCall.name,
-				args: toolCall.arguments as string,
+				input: JSON.parse(toolCall.arguments as string),
 			});
 		}
 
@@ -290,8 +289,26 @@ export class WorkersAIChatLanguageModel implements LanguageModelV2 {
 						console.log('Response from fallback stream:', response);
 
 						if (response.content) {
-
-							controller.enqueue(response.content[0]);
+							// Convert content to stream parts
+							for (const contentPart of response.content) {
+								if (contentPart.type === 'text') {
+									controller.enqueue({
+										type: 'text-start',
+										id: generateId(),
+									});
+									controller.enqueue({
+										type: 'text-delta',
+										id: generateId(),
+										delta: contentPart.text,
+									});
+									controller.enqueue({
+										type: 'text-end',
+										id: generateId(),
+									});
+								} else if (contentPart.type === 'tool-call') {
+									controller.enqueue(contentPart);
+								}
+							}
 						}
 
 
@@ -302,10 +319,9 @@ export class WorkersAIChatLanguageModel implements LanguageModelV2 {
 							for (const toolCall of response.toolCalls) {
 								controller.enqueue({
 									type: 'tool-call',
-									toolCallType: 'function',
 									toolCallId: toolCall.id ?? crypto.randomUUID(),
 									toolName: toolCall.function.name,
-									args: toolCall.function.arguments,
+									input: JSON.parse(toolCall.function.arguments),
 								});
 							}
 						}
